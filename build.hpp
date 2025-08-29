@@ -36,6 +36,9 @@ public:
         return m_hash;
     }
     bool need_update() const {
+        if (!exists(m_file)) {
+            return true;
+        }
         for (uint32_t i = 0; i < m_dependencies.size(); i++) {
             auto& dependency = m_dependencies[i];
             auto& dependency_prev_hash = m_dependencies_hash[i];
