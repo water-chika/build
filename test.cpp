@@ -14,7 +14,7 @@ int main() {
             std::vector<std::weak_ptr<build::file_object>>{build_hpp, test_cpp},
             [](){
                 std::cout << "building" << std::endl;
-                auto command = "c++ test.cpp -o test -std=c++20";
+                auto command = "c++ test.cpp -o test -std=c++20 -ltbb";
                 system(command);
                 std::cout << command << std::endl;
             }

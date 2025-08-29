@@ -5,6 +5,7 @@
 #include <functional>
 #include <filesystem>
 #include <iostream>
+#include <execution>
 
 namespace build {
 
@@ -89,12 +90,15 @@ public:
         bool is_updated = false;
         do {
             is_updated = false;
-            for (auto object : m_objects) {
-                if (object->need_update()) {
-                    is_updated = true;
-                    object->update();
-                }
-            }
+            std::for_each(
+                std::execution::par,
+                m_objects.begin(), m_objects.end(),
+                [&is_updated](auto& object) {
+                    if (object->need_update()) {
+                        is_updated = true;
+                        object->update();
+                    }
+                });
         } while (is_updated);
     }
 private:
