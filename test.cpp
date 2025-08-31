@@ -12,11 +12,12 @@ int main() {
     auto test = std::make_shared<build::file_object>(
             "test",
             std::vector<std::weak_ptr<build::file_object>>{build_hpp, test_cpp},
-            [](){
+            [](auto){
                 std::cout << "building" << std::endl;
                 auto command = "c++ test.cpp -o test -std=c++20 -ltbb";
-                system(command);
+                int res = system(command);
                 std::cout << command << std::endl;
+                return res == 0? build::update_res::success : build::update_res::failed;
             }
             );
 

@@ -20,11 +20,16 @@ uint64_t hash_file(const std::filesystem::path& file) {
     }
 }
 
+enum class update_res : uint32_t {
+    success = 0,
+    failed = 1,
+};
+
 class file_object {
 public:
     file_object(std::filesystem::path file,
             std::vector<std::weak_ptr<file_object>> dependencies = {},
-            std::function<void()> update_action = {})
+            std::function<update_res(const file_object&)> update_action = {})
         : m_file{file},
         m_dependencies{dependencies},
         m_update_action{std::move(update_action)},
@@ -52,13 +57,21 @@ public:
 
         return false;
     }
-    void update() {
-        m_update_action();
+    update_res update() {
+        auto res = m_update_action(*this);
         update_dependencies_hash();
+        return res;
     }
     void add_dependency(std::weak_ptr<file_object> dependency) {
         m_dependencies.push_back(dependency);
         m_dependencies_hash.push_back({});
+    }
+
+    auto& get_file_path() const {
+        return m_file;
+    }
+    auto& get_dependencies() const {
+        return m_dependencies;
     }
 
 private:
@@ -73,36 +86,53 @@ private:
     }
     std::filesystem::path m_file;
     std::vector<std::weak_ptr<file_object>> m_dependencies;
-    std::function<void()> m_update_action;
+    std::function<update_res(const file_object&)> m_update_action;
 
     std::vector<uint64_t> m_dependencies_hash;
 
     uint64_t m_hash;
 };
 
-template<typename Object=file_object, typename Action = std::function<void()>>
+template<typename Object=file_object, typename Action = std::function<update_res(const file_object&)>>
 class dependency_graph {
 public:
     void add(std::shared_ptr<file_object> obj) {
         m_objects.push_back(obj);
     }
-    void update() {
+    update_res update() {
         bool is_updated = false;
+        bool is_success = true;
         do {
             is_updated = false;
             std::for_each(
                 std::execution::par,
                 m_objects.begin(), m_objects.end(),
-                [&is_updated](auto& object) {
+                [&is_updated, &is_success](auto& object) {
                     if (object->need_update()) {
                         is_updated = true;
-                        object->update();
+                        auto res = object->update();
+                        if (res != update_res::success) {
+                            is_success = false;
+                        }
                     }
                 });
-        } while (is_updated);
+        } while (is_updated && is_success);
+        return is_success ? update_res::success : update_res::failed;
     }
 private:
     std::vector<std::shared_ptr<file_object>> m_objects;
 };
+
+auto dependencies(auto... args) {
+    return std::vector<std::weak_ptr<build::file_object>>{args...};
+}
+
+auto file(std::filesystem::path path, std::vector<std::weak_ptr<build::file_object>> dependencies = {}, std::function<update_res(const file_object&)> action = {}) {
+    return std::make_shared<build::file_object>(
+            path,
+            dependencies,
+            action
+    );
+}
 
 }
