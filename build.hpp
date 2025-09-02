@@ -66,6 +66,11 @@ public:
         m_dependencies.push_back(dependency);
         m_dependencies_hash.push_back({});
     }
+    void add_dependency(std::vector<std::weak_ptr<file_object>> dependencies) {
+        for (auto dependency : dependencies) {
+            add_dependency(dependency);
+        }
+    }
 
     auto& get_file_path() const {
         return m_file;
@@ -134,5 +139,118 @@ auto file(std::filesystem::path path, std::vector<std::weak_ptr<build::file_obje
             action
     );
 }
+
+auto c_plus_plus_compile(const std::vector<std::string>& src, const std::string& output_path) {
+    std::string sources = "";
+    std::ranges::for_each(
+            src,
+            [&sources](auto s) {
+                sources += " " + s;
+            }
+            );
+    auto command = std::format("c++ {} -o {} -std=c++23 -ltbb", sources, output_path);
+    std::cout << command << std::endl;
+    return system(command.c_str());
+}
+auto c_plus_plus_compile(const std::string src, const std::string& output_path) {
+    return c_plus_plus_compile(std::vector<std::string>{src}, output_path);
+}
+auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::string& output_path) {
+    std::string sources = "";
+    std::ranges::for_each(
+            src,
+            [&sources](auto s) {
+                sources += " " + s;
+            }
+            );
+    auto command = std::format("amdclang++ -x hip --offload-arch=gfx1201 {} -o {} -std=c++20", sources, output_path);
+    std::cout << command << std::endl;
+    return system(command.c_str());
+}
+
+struct cpp_file_compile_action {
+static auto operator()(const auto& target){
+    auto weak_sources = target.get_dependencies();
+    auto sources = std::vector<std::shared_ptr<build::file_object>>(weak_sources.size());
+    std::ranges::transform(
+            weak_sources,
+            sources.begin(),
+            [](auto e) {
+                return e.lock();
+            }
+            );
+    auto sources_string = std::vector<std::string>(sources.size());
+    std::ranges::transform(
+            sources,
+            sources_string.begin(),
+            [](auto& src) {
+                return src->get_file_path().string();
+            }
+            );
+    auto res = c_plus_plus_compile(sources_string, target.get_file_path());
+    return res == 0 ? build::update_res::success : build::update_res::failed;
+}
+};
+struct hip_file_compile_action {
+static auto operator()(const auto& target){
+    auto weak_sources = target.get_dependencies();
+    auto sources = std::vector<std::shared_ptr<build::file_object>>(weak_sources.size());
+    std::ranges::transform(
+            weak_sources,
+            sources.begin(),
+            [](auto e) {
+                return e.lock();
+            }
+            );
+    auto sources_string = std::vector<std::string>(sources.size());
+    std::ranges::transform(
+            sources,
+            sources_string.begin(),
+            [](auto& src) {
+                return src->get_file_path().string();
+            }
+            );
+    auto res = amdclang_plus_plus_compile(sources_string, target.get_file_path());
+    return res == 0 ? build::update_res::success : build::update_res::failed;
+}
+};
+
+class builder {
+public:
+    void add_executable_help(std::string name, auto compile_action, std::convertible_to<std::string> auto... sources) {
+        auto sources_set = std::vector{sources...};
+        auto sources_refs = std::vector<std::weak_ptr<build::file_object>>(sources_set.size());
+        for (uint32_t i = 0; i < sources_set.size(); i++) {
+            auto& source = sources_set[i];
+            if (!m_name_map.contains(source)) {
+                m_name_map[source] = build::file(source);
+            }
+            sources_refs[i] = m_name_map[source];
+        }
+        if (m_name_map.contains(name)) {
+            auto& exe = m_name_map[name];
+            exe->add_dependency(sources_refs);
+        }
+        else {
+            auto exe = build::file(name, build::dependencies(sources_refs),
+                    std::move(compile_action)
+                    );
+            m_name_map[name] = exe;
+            m_graph.add(exe);
+        }
+    }
+    void add_executable(std::string name, std::convertible_to<std::string> auto... sources) {
+        add_executable_help(name, build::cpp_file_compile_action{}, sources...);
+    }
+    void add_hip_executable(std::string name, std::convertible_to<std::string> auto... sources) {
+        add_executable_help(name, build::hip_file_compile_action{}, sources...);
+    }
+    auto build() {
+        return m_graph.update();
+    }
+private:
+    std::unordered_map<std::string, std::shared_ptr<build::file_object>> m_name_map;
+    build::dependency_graph<> m_graph;
+};
 
 }
