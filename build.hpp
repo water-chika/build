@@ -163,7 +163,7 @@ auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::
                 sources += " " + s;
             }
             );
-    auto command = std::format("amdclang++ -x hip --offload-arch=gfx1201 {} -o {} -std=c++20", sources, output_path);
+    auto command = std::format("amdclang++ -x hip --offload-arch=gfx1201 {} -o {} -std=c++23 -ltbb", sources, output_path);
     std::cout << command << std::endl;
     return system(command.c_str());
 }
