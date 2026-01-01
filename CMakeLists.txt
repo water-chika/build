@@ -7,6 +7,5 @@ add_library(build INTERFACE
 
 target_compile_features(build INTERFACE cxx_std_23)
 
-add_subdirectory(win32_helper)
-
+target_include_directories(build INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(build INTERFACE win32_helper)
