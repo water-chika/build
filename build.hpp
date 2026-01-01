@@ -140,7 +140,7 @@ auto file(std::filesystem::path path, std::vector<std::weak_ptr<build::file_obje
     );
 }
 
-auto c_plus_plus_compile(const std::vector<std::string>& src, const std::string& output_path) {
+auto c_plus_plus_compile(const std::vector<std::string>& src, const std::filesystem::path& output_path) {
     std::string sources = "";
     std::ranges::for_each(
             src,
@@ -148,14 +148,14 @@ auto c_plus_plus_compile(const std::vector<std::string>& src, const std::string&
                 sources += " " + s;
             }
             );
-    auto command = std::format("c++ {} -o {} -std=c++23 -ltbb", sources, output_path);
+    auto command = std::format("c++ {} -o {} -std=c++23 -ltbb", sources, output_path.string());
     std::cout << command << std::endl;
     return system(command.c_str());
 }
-auto c_plus_plus_compile(const std::string src, const std::string& output_path) {
+auto c_plus_plus_compile(const std::string src, const std::filesystem::path& output_path) {
     return c_plus_plus_compile(std::vector<std::string>{src}, output_path);
 }
-auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::string& output_path) {
+auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::filesystem::path& output_path) {
     std::string sources = "";
     std::ranges::for_each(
             src,
@@ -163,7 +163,7 @@ auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::
                 sources += " " + s;
             }
             );
-    auto command = std::format("amdclang++ -x hip --offload-arch=gfx1201 {} -o {} -std=c++23 -ltbb", sources, output_path);
+    auto command = std::format("amdclang++ -x hip --offload-arch=gfx1201 {} -o {} -std=c++23 -ltbb", sources, output_path.string());
     std::cout << command << std::endl;
     return system(command.c_str());
 }
