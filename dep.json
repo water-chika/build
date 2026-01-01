@@ -1,0 +1,10 @@
+{
+	"cpp_helper":{
+		"url": "https://github.com/water-chika/cpp_helper",
+		"commit": "a9b5127f0cb8ffa2aff1e5b187d422d748acf648"
+	},
+	"win32_helper": {
+		"url": "https://github.com/water-chika/win32_helper",
+		"commit": "0585b9cc534d51667229f6afb2065b8ee0755b0f"
+	}
+}
