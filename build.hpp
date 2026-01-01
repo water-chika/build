@@ -140,7 +140,7 @@ auto file(std::filesystem::path path, std::vector<std::weak_ptr<build::file_obje
     );
 }
 
-auto c_plus_plus_compile(const std::vector<std::string>& src, const std::filesystem::path& output_path) {
+auto c_plus_plus_compile(std::filesystem::path compiler, const std::vector<std::string>& src, const std::filesystem::path& output_path) {
     std::string sources = "";
     std::ranges::for_each(
             src,
@@ -148,12 +148,12 @@ auto c_plus_plus_compile(const std::vector<std::string>& src, const std::filesys
                 sources += " " + s;
             }
             );
-    auto command = std::format("c++ {} -o {} -std=c++23 -ltbb", sources, output_path.string());
+    auto command = std::format("{} {} -o {} -std=c++23 -ltbb", compiler.string(), sources, output_path.string());
     std::cout << command << std::endl;
     return system(command.c_str());
 }
-auto c_plus_plus_compile(const std::string src, const std::filesystem::path& output_path) {
-    return c_plus_plus_compile(std::vector<std::string>{src}, output_path);
+auto c_plus_plus_compile(std::filesystem::path compiler, const std::string src, const std::filesystem::path& output_path) {
+    return c_plus_plus_compile(compiler, std::vector<std::string>{src}, output_path);
 }
 auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::filesystem::path& output_path) {
     std::string sources = "";
@@ -169,27 +169,29 @@ auto amdclang_plus_plus_compile(const std::vector<std::string>& src, const std::
 }
 
 struct cpp_file_compile_action {
-static auto operator()(const auto& target){
-    auto weak_sources = target.get_dependencies();
-    auto sources = std::vector<std::shared_ptr<build::file_object>>(weak_sources.size());
-    std::ranges::transform(
-            weak_sources,
-            sources.begin(),
-            [](auto e) {
-                return e.lock();
-            }
-            );
-    auto sources_string = std::vector<std::string>(sources.size());
-    std::ranges::transform(
-            sources,
-            sources_string.begin(),
-            [](auto& src) {
-                return src->get_file_path().string();
-            }
-            );
-    auto res = c_plus_plus_compile(sources_string, target.get_file_path());
-    return res == 0 ? build::update_res::success : build::update_res::failed;
-}
+    auto operator()(const auto& target){
+        auto weak_sources = target.get_dependencies();
+        auto sources = std::vector<std::shared_ptr<build::file_object>>(weak_sources.size());
+        std::ranges::transform(
+                weak_sources,
+                sources.begin(),
+                [](auto e) {
+                    return e.lock();
+                }
+                );
+        auto sources_string = std::vector<std::string>(sources.size());
+        std::ranges::transform(
+                sources,
+                sources_string.begin(),
+                [](auto& src) {
+                    return src->get_file_path().string();
+                }
+                );
+        auto res = c_plus_plus_compile(m_compiler, sources_string, target.get_file_path());
+        return res == 0 ? build::update_res::success : build::update_res::failed;
+    }
+
+    std::filesystem::path m_compiler;
 };
 struct hip_file_compile_action {
 static auto operator()(const auto& target){
@@ -215,8 +217,30 @@ static auto operator()(const auto& target){
 }
 };
 
+#undef linux
+enum class os {
+    linux,
+    win32
+};
+#ifdef _WIN32
+constexpr auto current_os = os::win32;
+#else
+constexpr current_os = os::linux;
+#endif
+
+auto find_cxx_compiler() {
+    if (current_os == os::win32) {
+        return "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe";
+    }
+    else {
+        return "c++";
+    }
+}
+
 class builder {
 public:
+    builder() : m_cxx_compiler{find_cxx_compiler()} {
+    }
     void add_executable_help(std::string name, auto compile_action, std::convertible_to<std::string> auto... sources) {
         auto sources_set = std::vector{sources...};
         auto sources_refs = std::vector<std::weak_ptr<build::file_object>>(sources_set.size());
@@ -240,7 +264,7 @@ public:
         }
     }
     void add_executable(std::string name, std::convertible_to<std::string> auto... sources) {
-        add_executable_help(name, build::cpp_file_compile_action{}, sources...);
+        add_executable_help(name, build::cpp_file_compile_action{m_cxx_compiler}, sources...);
     }
     void add_hip_executable(std::string name, std::convertible_to<std::string> auto... sources) {
         add_executable_help(name, build::hip_file_compile_action{}, sources...);
@@ -251,6 +275,7 @@ public:
 private:
     std::unordered_map<std::string, std::shared_ptr<build::file_object>> m_name_map;
     build::dependency_graph<> m_graph;
+    std::filesystem::path m_cxx_compiler;
 };
 
 }
