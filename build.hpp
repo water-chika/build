@@ -194,7 +194,7 @@ struct cpp_file_compile_action {
     std::filesystem::path m_compiler;
 };
 struct hip_file_compile_action {
-static auto operator()(const auto& target){
+auto operator()(const auto& target){
     auto weak_sources = target.get_dependencies();
     auto sources = std::vector<std::shared_ptr<build::file_object>>(weak_sources.size());
     std::ranges::transform(
